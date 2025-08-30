@@ -33,37 +33,71 @@ class Program
         var me = await client.LoginUserIfNeeded();
         Console.WriteLine($"Логин выполнен: {me} (id {me.id})");  // :contentReference[oaicite:2]{index=2}
 
-        // === ДЕМО: управление конкретным ботом ===
-        // 1) укажите юзернейм бота без '@'
         var botUsername = args.FirstOrDefault() ?? "flamestarsbot"; // пример
         var rp = await client.Contacts_ResolveUsername(botUsername); // peer бота
-        // var botPeer = client.InputPeer(rp.peer);
 
-        // 2) /start
         await client.SendMessageAsync(rp, "/start");
         Console.WriteLine("Отправил /start");
         await Task.Delay(1000);
 
-        // // 3) Нажать кнопку обычной клавиатуры (ReplyKeyboard) — отправляем ее текст
-        // // (Если ее нет — просто ничего не произойдет)
-        // await PressReplyKeyboardButton(rp, "Menu");
-
-        // // 4) Нажать Inline-кнопку с данным текстом (ищем последнюю сообщение с инлайн-клавой)
-        // await PressInlineButton(rp, "Фарм звезд");
-
         await PressInlineButtonChain(rp, "✨ Фарм звезд");
         await Task.Delay(2000);
-        await PressInlineButtonChain(rp, "✨ Фармить звёзды");
-        await Task.Delay(90_003);
 
+        // Запускаем обе задачи параллельно
+        var farmTask = RunFarmingLoop(rp);
+        var dailyTask = RunDailyRewardLoop(rp);
+
+        await Task.WhenAll(farmTask, dailyTask);
+    }
+
+    // 🔹 Цикл ежедневки (в определённое время суток)
+    private static async Task RunDailyRewardLoop(InputPeer rp)
+    {
+        var waitOffset = TimeSpan.FromDays(1) + TimeSpan.FromHours(1) + TimeSpan.FromMinutes(1);
+
+
+
+
+        // ЗДЕСЬ! задайте свое время последнего нажатия ежедневки(год, месяц, день, час, минута, секунда)
+        DateTime startTime = new DateTime(2025, 8, 30, 22, 23, 0);
+
+
+
+
+        var nextTargetTime = startTime + waitOffset;
         while (true)
         {
-            await PressInlineButtonChain(rp, "✨ Фармить звёзды");
-            await Task.Delay(90_003);
+            var waitTime = nextTargetTime - DateTime.Now;
+            Console.WriteLine($"🎁 Жду {waitTime.Days} days {waitTime.Hours} hours {waitTime.Minutes} minutes до ежедневки...");
+            await Task.Delay(waitTime);
+
+            try
+            {
+                Console.WriteLine("🎁 Пробую забрать ежедневку...");
+                await PressInlineButtonChain(rp, "⬅️ В главное меню");
+                nextTargetTime += waitOffset;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[DailyRewardLoop] Ошибка: {ex.Message}");
+            }
         }
     }
 
-    
+
+    private static async Task RunFarmingLoop(InputPeer rp)
+    {
+        while (true)
+        {
+            await PressInlineButtonChain(rp, "✨ Фармить звёзды");
+            await Task.Delay(500);
+            var resCaptcha = await TrySolveCaptcha(rp);
+            if (resCaptcha != int.MinValue + 1)
+                await _client.SendMessageAsync(rp, resCaptcha.ToString());
+
+            await Task.Delay(89_500);
+        }
+    }
 
     private static Task OnUpdates(UpdatesBase updates)
     {
@@ -86,56 +120,58 @@ class Program
         return Task.CompletedTask;
     }
 
-    // === ReplyKeyboard: "нажать" = отправить текст кнопки
-    private static async Task PressReplyKeyboardButton(InputPeer peer, string buttonText)
+    private static async Task<int> TrySolveCaptcha(InputPeer peer)
     {
-        Console.WriteLine($"Пробую нажать ReplyKeyboard: \"{buttonText}\" (отправляю текст)...");
-        await _client.SendMessageAsync(peer, buttonText);
-    }
+        System.Console.WriteLine("Try solve captcha start...");
+        var hist = await _client.Messages_GetHistory(peer, limit: 10);
+        var m = hist.Messages.OfType<Message>().OrderByDescending(m => m.date).First();
 
-    // === InlineKeyboard: нажать callback-кнопку по тексту
-    private static async Task PressInlineButton(InputPeer peer, string buttonText)
-    {
-        // Берем недавнюю историю чата и ищем последнюю Inline-клавиатуру
-        var hist = await _client.Messages_GetHistory(peer, limit: 50); // :contentReference[oaicite:3]{index=3}
-        var messages = hist.Messages.OfType<Message>()
-                         .OrderByDescending(m => m.date);
+        // foreach (var m in messages)
+        // {
+        if (m.reply_markup != null) return int.MinValue + 1;
 
-        foreach (var m in messages)
+        // var msg = m.message.Replace("", "");
+        if (m.message.Length < 40 && m.message.StartsWith("Пожалуйста, решите пример: "))
         {
-            if (m.reply_markup is not ReplyInlineMarkup rim) continue;
+            var msg = m.message.Replace("Пожалуйста, решите пример: ", "");
+            Console.WriteLine($"[TrySolveCaptcha] right message: {m.message}");
+            Console.WriteLine($"[TrySolveCaptcha] trim message: {msg}");
 
-            foreach (var row in rim.rows)
-                foreach (var b in row.buttons)
-                {
-                    switch (b)
-                    {
-                        case KeyboardButtonCallback kbc when
-                            string.Equals(kbc.text, buttonText, StringComparison.OrdinalIgnoreCase):
-                            {
-                                Console.WriteLine($"Жму inline-кнопку: \"{kbc.text}\"");
-                                // В MTProto это messages.getBotCallbackAnswer
-                                var ans = await _client.Messages_GetBotCallbackAnswer(peer, m.ID, data: kbc.data);
-                                Console.WriteLine($"Ответ callback: {(ans?.message ?? "(пусто/не текст)")}");
-                                return;
-                            }
-                        case KeyboardButtonUrl url when
-                            string.Equals(url.text, buttonText, StringComparison.OrdinalIgnoreCase):
-                            {
-                                Console.WriteLine($"Кнопка-URL: {url.url} (открывается в клиенте, по API «нажать» нельзя)");
-                                return;
-                            }
-                        case KeyboardButtonSwitchInline sw when
-                            string.Equals(sw.text, buttonText, StringComparison.OrdinalIgnoreCase):
-                            {
-                                Console.WriteLine("SwitchInline-кнопка переводит в inline-режим — «нажать» через API нельзя.");
-                                return;
-                            }
-                    }
-                }
+            var expr = msg.Replace("=", "");
+            int res = int.MinValue + 1;
+
+            if (expr.Contains("+"))
+            {
+                var splitExpr = expr.Split("+");
+                res = int.Parse(splitExpr[0]) + int.Parse(splitExpr[1]);
+            }
+            else if (expr.Contains("-"))
+            {
+                var splitExpr = expr.Split("-");
+                res = int.Parse(splitExpr[0]) - int.Parse(splitExpr[1]);
+            }
+            else if (expr.Contains("*"))
+            {
+                var splitExpr = expr.Split("*");
+                res = int.Parse(splitExpr[0]) * int.Parse(splitExpr[1]);
+            }
+            else if (expr.Contains("/"))
+            {
+                var splitExpr = expr.Split("/");
+                res = int.Parse(splitExpr[0]) / int.Parse(splitExpr[1]);
+            }
+            else
+            {
+                System.Console.WriteLine("[TrySolveCaptcha] TrySolveCaptcha end(НЕ ТОТ ОПЕРАНД)!");
+                return res;
+            }
+
+            System.Console.WriteLine("[TrySolveCaptcha] TrySolveCaptcha end(WITH CAPTCHA)!");
+            return res;
         }
-
-        Console.WriteLine("Inline-кнопка с таким текстом не найдена в последних сообщениях.");
+        // }
+        System.Console.WriteLine("[TrySolveCaptcha] TrySolveCaptcha end(NO CAPTCHA)!");
+        return int.MinValue + 1;
     }
 
     // Нажать inline-кнопку по тексту, и при желании сразу искать следующую
@@ -167,17 +203,13 @@ class Program
 
                                     try
                                     {
-                                        // Пытаемся получить ответ, но безопасно обрабатываем таймаут
-                                        var ans = await _client.Messages_GetBotCallbackAnswer(peer, m.ID, data: kbc.data);
-                                        Console.WriteLine($"Ответ: {(ans?.message ?? "(пусто/нет текста)")}");
+                                        _client.Messages_GetBotCallbackAnswer(peer, m.ID, data: kbc.data);
                                     }
-                                    catch (TL.RpcException ex) when (ex.Code == 400 && ex.Message.Contains("BOT_RESPONSE_TIMEOUT"))
+                                    catch (Exception ex)
                                     {
-                                        Console.WriteLine("⚠️ Бот не ответил на callback (timeout). Продолжаем...");
+                                        Console.WriteLine($"[FireAndForget] Ошибка: {ex.Message}");
                                     }
 
-                                    // Небольшая задержка, чтобы бот успел прислать новые сообщения
-                                    // await Task.Delay(delayInMs);
                                     pressed = true;
                                     break;
                                 }
