@@ -74,7 +74,7 @@ class Program
             try
             {
                 Console.WriteLine("🎁 Пробую забрать ежедневку...");
-                await PressInlineButtonChain(rp, "⬅️ В главное меню");
+                await PressInlineButtonChain(rp, "🎁 Ежедневка");
                 nextTargetTime += waitOffset;
             }
             catch (Exception ex)
