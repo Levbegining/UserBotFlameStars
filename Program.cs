@@ -15,9 +15,9 @@ class Program
         // Конфиг: из env-переменных, остальное - через консольный ввод
         string? Config(string what) => what switch
         {
-            "api_id" => "23980583",
-            "api_hash" => "5a54e4e3bb6db7aef474ad86ea27f30d",
-            "phone_number" => "+79013310638",
+            "api_id" => Environment.GetEnvironmentVariable("TELEGRAM_API_ID"),
+            "api_hash" => Environment.GetEnvironmentVariable("TELEGRAM_API_HASH"),
+            "phone_number" => Environment.GetEnvironmentVariable("TELEGRAM_PHONE"),
             // Для кода/пароля оставляем null => WTelegram спросит в консоли
             // "session_pathname" => "tg_userbot.session", // при желании можно задать путь
             _ => null
