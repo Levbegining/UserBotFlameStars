@@ -19,7 +19,7 @@ class Program
             "api_hash" => Environment.GetEnvironmentVariable("TELEGRAM_API_HASH"),
             "phone_number" => Environment.GetEnvironmentVariable("TELEGRAM_PHONE"),
             // Для кода/пароля оставляем null => WTelegram спросит в консоли
-            // "session_pathname" => "tg_userbot.session", // при желании можно задать путь
+            "session_pathname" => Environment.GetEnvironmentVariable("TELEGRAM_SESSION"), // при желании можно задать путь
             _ => null
         };
 
