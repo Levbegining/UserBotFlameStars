@@ -38,7 +38,7 @@ class Program
 
         await client.SendMessageAsync(rp, "/start");
         Console.WriteLine("Отправил /start");
-        await Task.Delay(1000);
+        await Task.Delay(2000);
 
         await PressInlineButtonChain(rp, "✨ Фарм звезд");
         await Task.Delay(2000);
@@ -46,20 +46,47 @@ class Program
         // Запускаем обе задачи параллельно
         var farmTask = RunFarmingLoop(rp);
         var dailyTask = RunDailyRewardLoop(rp);
+        var cleanerTask = RunCleanerMessagesEveryday(rp);
 
-        await Task.WhenAll(farmTask, dailyTask);
+        await Task.WhenAll(farmTask, dailyTask, cleanerTask);
+    }
+
+    private static async Task RunCleanerMessagesEveryday(InputPeer peer)
+    {
+        System.Console.WriteLine("[RunCleanerMessagesEveryday] start...");
+        var targetTime = new TimeSpan(23, 59, 59);
+        var now = DateTime.Now.TimeOfDay;
+
+        var waitTime = now < targetTime
+        ? targetTime - now
+        : TimeSpan.FromDays(1) - targetTime + now;
+
+        System.Console.WriteLine($"[RunCleanerMessagesEveryday] wait {waitTime.Hours} hours {waitTime.Minutes} min {waitTime.Seconds} sec...");
+        await Task.Delay(waitTime);
+
+        // var hist = await _client.Messages_GetHistory(peer);
+        // var messages = hist.Messages;
+        _client.DeleteChat(peer);
+
+        await _client.SendMessageAsync(peer, "/start");
+        Console.WriteLine("Отправил /start");
+        await Task.Delay(2000);
+
+        await PressInlineButtonChain(peer, "✨ Фарм звезд");
+        System.Console.WriteLine("[RunCleanerMessagesEveryday] end his work...");
+        await Task.Delay(2000);
     }
 
     // 🔹 Цикл ежедневки (в определённое время суток)
     private static async Task RunDailyRewardLoop(InputPeer rp)
     {
-        var waitOffset = TimeSpan.FromDays(1) + TimeSpan.FromHours(1) + TimeSpan.FromMinutes(1);
+        var waitOffset = TimeSpan.FromDays(1) + TimeSpan.FromHours(1) + TimeSpan.FromMinutes(1) + TimeSpan.FromSeconds(1);
 
 
 
 
         // ЗДЕСЬ! задайте свое время последнего нажатия ежедневки(год, месяц, день, час, минута, секунда)
-        DateTime startTime = new DateTime(2025, 8, 30, 22, 23, 0);
+        DateTime startTime = new DateTime(2025, 9, 1, 23, 25, 0);
 
 
 
@@ -91,11 +118,8 @@ class Program
         {
             await PressInlineButtonChain(rp, "✨ Фармить звёзды");
             await Task.Delay(500);
-            var resCaptcha = await TrySolveCaptcha(rp);
-            if (resCaptcha != int.MinValue + 1)
-                await _client.SendMessageAsync(rp, resCaptcha.ToString());
-
-            await Task.Delay(89_500);
+            await TrySolveCaptcha(rp); // TrySolveCaptcha - 500 ms
+            await Task.Delay(90_000);
         }
     }
 
@@ -112,23 +136,30 @@ class Program
                 if (msg.reply_markup is ReplyInlineMarkup rim)
                 {
                     var texts = rim.rows.SelectMany(r => r.buttons)
-                                        .Select(b => (b as KeyboardButtonBase)?.ToString());
-                    Console.WriteLine("  (есть inline-кнопки)");
+                                        .Select(b => b switch
+                                        {
+                                            KeyboardButtonCallback kbc => kbc.text
+                                        });
+                    Console.WriteLine($"  (есть inline-кнопки): {String.Join(", ", texts)}");
                 }
             }
         }
         return Task.CompletedTask;
     }
 
-    private static async Task<int> TrySolveCaptcha(InputPeer peer)
+    private static async Task TrySolveCaptcha(InputPeer peer)
     {
-        System.Console.WriteLine("Try solve captcha start...");
-        var hist = await _client.Messages_GetHistory(peer, limit: 10);
-        var m = hist.Messages.OfType<Message>().OrderByDescending(m => m.date).First();
+        System.Console.WriteLine("[TrySolveCaptcha] start...");
+        var hist = await _client.Messages_GetHistory(peer, limit: 1);
+        var m = hist.Messages.OfType<Message>().First();
 
         // foreach (var m in messages)
         // {
-        if (m.reply_markup != null) return int.MinValue + 1;
+        if (m.reply_markup != null)
+        {
+            System.Console.WriteLine("[TrySolveCaptcha] end(NO CAPTCHA)!");
+            return;
+        }
 
         // var msg = m.message.Replace("", "");
         if (m.message.Length < 40 && m.message.StartsWith("Пожалуйста, решите пример: "))
@@ -162,16 +193,29 @@ class Program
             }
             else
             {
-                System.Console.WriteLine("[TrySolveCaptcha] TrySolveCaptcha end(НЕ ТОТ ОПЕРАНД)!");
-                return res;
+                System.Console.WriteLine("[TrySolveCaptcha] end(НЕ ТОТ ОПЕРАНД)!");
+                return;
             }
 
-            System.Console.WriteLine("[TrySolveCaptcha] TrySolveCaptcha end(WITH CAPTCHA)!");
-            return res;
+            // if (res == int.MinValue + 1) return;
+
+            System.Console.WriteLine("[TrySolveCaptcha] end(WITH CAPTCHA)!");
+
+            await _client.SendMessageAsync(peer, res.ToString());
+
+            await Task.Delay(500);
+            hist = await _client.Messages_GetHistory(peer, limit: 3);
+            var captchaMsgs = hist.Messages.OfType<Message>();
+            foreach (var captchaMsg in captchaMsgs)
+            {
+                System.Console.WriteLine($"[TrySolveCaptcha] text of message: {captchaMsg.message}");
+                await _client.DeleteMessages(peer, captchaMsg.ID);
+            }
+
+            return;
         }
         // }
-        System.Console.WriteLine("[TrySolveCaptcha] TrySolveCaptcha end(NO CAPTCHA)!");
-        return int.MinValue + 1;
+        System.Console.WriteLine("[TrySolveCaptcha] end(SOMETHING WENT WRONG)");
     }
 
     // Нажать inline-кнопку по тексту, и при желании сразу искать следующую
