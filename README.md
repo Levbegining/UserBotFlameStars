@@ -27,6 +27,7 @@
     export TELEGRAM_API_ID=23980583
     export TELEGRAM_API_HASH=5a54e4e3bb6db7aef474ad86ea27f30d
     export TELEGRAM_PHONE="+7XXXXXXXXXX"   # или оставить пустым — тогда WTelegram спросит
+    export TELEGRAM_SESSION="[NAME].session"	# просто имя файла .session
     ```
 
 3. Запустите:
@@ -46,7 +47,6 @@
 5. Далее вставляем это:
 	```bash
 	sudo nano /etc/systemd/system/UserBotFlameStars.service
-	# вставить содержимое, сохранить
 	```
 	Если возникает ошибка, то, возможно, у вас не установлен nano. Установите его
 	Далее вставляем в открывшийся редактор код(его нужно будет дописать/исправить):
