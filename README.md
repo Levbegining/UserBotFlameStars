@@ -58,8 +58,8 @@
 	User=root
 	WorkingDirectory=/projects/UserBotFlameStars
 	ExecStart=dotnet /projects/UserBotFlameStars/bin/Debug/net8.0/UserBotFlameStars.dll
-	Environment="TELEGRAM_API_ID=23980583"
-	Environment="TELEGRAM_API_HASH=5a54e4e3bb6db7aef474ad86ea27f30d"
+	Environment="TELEGRAM_API_ID="
+	Environment="TELEGRAM_API_HASH="
 	Environment="TELEGRAM_PHONE="
 	# optional items below
 	Restart=always
